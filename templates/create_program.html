@@ -1,0 +1,29 @@
+<!-- templates/create_program.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h3 class="card-title mb-4">Create Health Program</h3>
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Program Name</label>
+                    <input type="text" name="name" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">ICD Code</label>
+                    <input type="text" name="code" class="form-control" placeholder="e.g., A00.0">
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Description</label>
+                    <textarea name="description" class="form-control" rows="4" required></textarea>
+                </div>
+                <div class="col-12 d-flex justify-content-between">
+                    <a href="/" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Create Program</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

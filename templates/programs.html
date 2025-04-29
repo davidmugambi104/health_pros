@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <div class="row">
+    <div class="col-md-8 mx-auto">
+      <div class="auth-card">
+        <h3 class="mb-4">Available Programs</h3>
+        {% for program in programs %}
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5>{{ program.name }}</h5>
+            <p>{{ program.description }}</p>
+            <div class="d-flex justify-content-between">
+              <small>Duration: {{ program.duration }}</small>
+              {% if program.id in user_enrollments %}
+                <span class="text-success">✓ Enrolled</span>
+              {% else %}
+                <form method="POST" action="{{ url_for('enroll', program_id=program.id) }}">
+                  <button class="btn btn-sm btn-primary">Enroll</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+  <div class="row">
+    <div class="col-md-8 mx-auto">
+      <div class="auth-card">
+        <h3 class="mb-4">My Programs</h3>
+        {% if not enrollments %}
+          <div class="alert alert-info">No active enrollments</div>
+        {% endif %}
+        
+        {% for enrollment in enrollments %}
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5>{{ enrollment.program.name }}</h5>
+            <p>{{ enrollment.program.description }}</p>
+            <div class="d-flex justify-content-between">
+              <small>Enrolled: {{ enrollment.enrolled_at.date() }}</small>
+              <form method="POST" action="{{ url_for('unenroll', enrollment_id=enrollment.id) }}">
+                <button class="btn btn-sm btn-danger">Unenroll</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        
+        <a href="{{ url_for('programs') }}" class="btn btn-secondary">
+          Browse Programs
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

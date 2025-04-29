@@ -1,0 +1,49 @@
+<!-- templates/medical_record.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <h3 class="card-title mb-4">Medical Record for {{ client.name }}</h3>
+        
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Diagnosis</label>
+                <textarea name="diagnosis" class="form-control" rows="3" required></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Prescriptions</label>
+                <textarea name="prescriptions" class="form-control" rows="3"></textarea>
+            </div>
+            
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('client_profile', client_id=client.id) }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Record</button>
+            </div>
+        </form>
+        
+        <hr class="my-4">
+        
+        <h5 class="mb-3">Medical History</h5>
+        {% if client.medical_records %}
+            <div class="list-group">
+                {% for record in client.medical_records|reverse %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="mb-1">{{ record.diagnosis }}</h6>
+                            <small class="text-muted">{{ record.visit_date.strftime('%Y-%m-%d') }}</small>
+                        </div>
+                        <div>
+                            <small class="text-muted">Prescriptions: {{ record.prescriptions or 'None' }}</small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">No medical records found</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

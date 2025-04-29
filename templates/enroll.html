@@ -1,0 +1,44 @@
+<!-- templates/enroll.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h3 class="card-title mb-4">Program Enrollment</h3>
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-subtitle mb-3">Select Patient</h5>
+                            <select name="client" class="form-select" size="8" required>
+                                {% for client in clients %}
+                                <option value="{{ client.id }}">{{ client.name }} ({{ client.dob|default('N/A')|calculate_age }}y)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-subtitle mb-3">Select Program</h5>
+                            <select name="program" class="form-select" size="8" required>
+                                {% for program in programs %}
+                                <option value="{{ program.id }}">{{ program.name }} ({{ program.code }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg py-3">
+                            <i class="bi bi-check-circle me-2"></i>Complete Enrollment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

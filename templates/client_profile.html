@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="mb-0">{{ client.name }}</h2>
+                <small class="text-muted">MRN: {{ client.id }}</small>
+            </div>
+            <div class="btn-group">
+                <a href="/api/client/{{ client.id }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-code-slash"></i> API Access
+                </a>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-subtitle mb-3">Demographics</h5>
+                        <dl class="row">
+                            <dt class="col-sm-5">DOB</dt>
+                            <dd class="col-sm-7">{{ client.dob.strftime('%d/%m/%Y') }}</dd>
+
+                            <dt class="col-sm-5">Age</dt>
+                            <dd class="col-sm-7">{{ calculate_age(client.dob) }}</dd>
+
+                            <dt class="col-sm-5">Contact</dt>
+                            <dd class="col-sm-7">{{ client.contact }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-subtitle mb-3">Treatment Programs</h5>
+                        {% if client.enrollments %}
+                        <div class="list-group">
+                            {% for enrollment in client.enrollments %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="mb-1">{{ enrollment.program.name }}</h6>
+                                        <small class="text-muted">
+                                            Enrolled: {{ enrollment.enrolled_at.strftime('%d %b %Y') }}
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-primary rounded-pill">Active</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info mb-0">No active treatment programs</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
