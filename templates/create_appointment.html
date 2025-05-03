@@ -12,29 +12,72 @@
                     <form method="POST">
                         {{ form.hidden_tag() }}
                         
+                        <!-- Patient Selection with Error Handling -->
                         <div class="mb-3">
-                            {{ form.patient_id.label(class="form-label") }}
-                            {{ form.patient_id(class="form-select") }}
+                            {{ form.patient.label(class="form-label") }}
+                            {% if form.patient.errors %}
+                                {{ form.patient(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.patient.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.patient(class="form-select") }}
+                            {% endif %}
                         </div>
-                        
+
+                        <!-- Date Input with Error Handling -->
                         <div class="mb-3">
                             {{ form.date.label(class="form-label") }}
-                            {{ form.date(class="form-control") }}
+                            {% if form.date.errors %}
+                                {{ form.date(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.date.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.date(class="form-control") }}
+                            {% endif %}
                         </div>
-                        
+
+                        <!-- Urgent Checkbox with Error Handling -->
                         <div class="mb-3 form-check">
-                            {{ form.is_urgent(class="form-check-input") }}
+                            {% if form.is_urgent.errors %}
+                                {{ form.is_urgent(class="form-check-input is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.is_urgent.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.is_urgent(class="form-check-input") }}
+                            {% endif %}
                             {{ form.is_urgent.label(class="form-check-label") }}
                         </div>
-                        
+
+                        <!-- Notes Field with Error Handling -->
                         <div class="mb-3">
                             {{ form.notes.label(class="form-label") }}
-                            {{ form.notes(class="form-control", rows=3) }}
+                            {% if form.notes.errors %}
+                                {{ form.notes(class="form-control is-invalid", rows=3) }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.notes.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.notes(class="form-control", rows=3) }}
+                            {% endif %}
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-calendar-plus me-2"></i>Schedule Appointment
-                        </button>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-calendar-plus me-2"></i>Schedule Appointment
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>

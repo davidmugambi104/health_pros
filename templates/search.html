@@ -29,7 +29,7 @@
                     {% for client in clients %}
                     <tr>
                         <td>{{ client.name }}</td>
-                        <td>{{ calculate_age(client.dob) }}</td>
+                        <td>{{ client.age }}</dd>
                         <td>{{ client.contact }}</td>
                         <td>
                             <a href="/client/{{ client.id }}" class="btn btn-sm btn-primary">

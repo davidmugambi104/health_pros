@@ -1,8 +1,8 @@
-"""Add appointment model
+"""david
 
-Revision ID: 72533fc43710
+Revision ID: 07241dfb5460
 Revises: 
-Create Date: 2025-04-29 02:08:18.677195
+Create Date: 2025-04-29 19:10:45.773859
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '72533fc43710'
+revision = '07241dfb5460'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -33,6 +33,16 @@ def upgrade():
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
+    op.create_table('pending_action',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=100), nullable=False),
+    sa.Column('action_type', sa.String(length=50), nullable=True),
+    sa.Column('related_id', sa.Integer(), nullable=True),
+    sa.Column('description', sa.String(length=200), nullable=True),
+    sa.Column('due_date', sa.DateTime(), nullable=True),
+    sa.Column('completed', sa.Boolean(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('programs',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
@@ -40,6 +50,11 @@ def upgrade():
     sa.Column('code', sa.String(length=10), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
+    )
+    op.create_table('task',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('completed', sa.Boolean(), nullable=True),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -58,6 +73,8 @@ def upgrade():
     sa.Column('date', sa.DateTime(), nullable=False),
     sa.Column('notes', sa.Text(), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=True),
+    sa.Column('is_urgent', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['client_id'], ['clients.id'], ),
     sa.ForeignKeyConstraint(['doctor_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -102,7 +119,9 @@ def downgrade():
     op.drop_table('audit_logs')
     op.drop_table('appointments')
     op.drop_table('users')
+    op.drop_table('task')
     op.drop_table('programs')
+    op.drop_table('pending_action')
     op.drop_table('medications')
     op.drop_table('clients')
     # ### end Alembic commands ###

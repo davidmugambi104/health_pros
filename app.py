@@ -1,5 +1,8 @@
 from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
+from flask import abort
 # app.py
+from sqlalchemy.exc import SQLAlchemyError
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -10,9 +13,11 @@ from flask_migrate import Migrate
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import requests
+from sqlalchemy import case, and_
+from flask_caching import Cache
 import os
-from forms import AppointmentForm 
-from datetime import datetime
+from forms import CreateAppointmentForm
+from datetime import datetime, timedelta
 
 # ----------------------
 # Initialization
@@ -25,7 +30,8 @@ def calculate_age(dob):
 
 app = Flask(__name__)
 
-app.add_template_global(calculate_age, name='calculate_age')
+app.jinja_env.filters['calculate_age'] = calculate_age
+
 
 
 
@@ -42,6 +48,7 @@ app.config.update({
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 login_manager.login_view = 'login'
 migrate = Migrate(app, db)
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
@@ -67,6 +74,8 @@ class User(UserMixin, db.Model):
     active = db.Column(db.Boolean, default=True)
     audit_logs = db.relationship('AuditLog', backref='user', lazy=True)
 
+    appointments = db.relationship('Appointment', back_populates='doctor')
+
 class Client(db.Model):
     __tablename__ = 'clients'
     id = db.Column(db.Integer, primary_key=True)
@@ -77,9 +86,17 @@ class Client(db.Model):
     enrollments = db.relationship('Enrollment', backref='client', lazy=True)
     medical_records = db.relationship('MedicalRecord', backref='client', lazy=True)
     appointments = db.relationship('Appointment', backref='client', lazy=True) # scheduled/completed/cancelled
+    email = db.Column(db.String(120), nullable=True)    
+    contact = db.Column(db.String(20))
+    
+    appointments = db.relationship('Appointment', back_populates='client')
 
 
 class PendingAction(db.Model):
+    __table_args__ = (
+        db.Index('ix_pending_action_completed', 'completed'),
+        db.Index('ix_pending_action_type_completed', 'action_type', 'completed'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     action_type = db.Column(db.String(50))  # 'approval', 'followup', 'review'
@@ -87,7 +104,16 @@ class PendingAction(db.Model):
     description = db.Column(db.String(200))
     due_date = db.Column(db.DateTime)
     completed = db.Column(db.Boolean, default=False)
+    
+    # Add user relationship without losing existing data
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Start with nullable
+    user = db.relationship('User', backref='pending_actions')
+
 class Appointment(db.Model):
+    __table_args__ = (
+        db.Index('ix_appointment_date_status', 'date', 'status'),
+        db.Index('ix_appointment_urgent_status', 'is_urgent', 'status'),
+    )
     __tablename__ = 'appointments'
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
@@ -97,9 +123,12 @@ class Appointment(db.Model):
     status = db.Column(db.String(20), default='scheduled')
     is_urgent = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship with explicit back_populates
+    client = db.relationship('Client', back_populates='appointments')
+    doctor = db.relationship('User', back_populates='appointments')
 
-    # Relationship for easy access
-    doctor = db.relationship('User', backref='appointments')
+
 class Program(db.Model):
     __tablename__ = 'programs'
     id = db.Column(db.Integer, primary_key=True)
@@ -145,31 +174,59 @@ class Task(db.Model):
 
 # ----------------------
 # Security Enhancements
-# ----------------------@app.route('/dashboard')
+# ----------------------@app.route('/dashboard')# Update with your models
+
+@app.route('/dashboard')
+@login_required
+@cache.cached(timeout=300, key_prefix='dashboard_data')  # Optional caching
 def dashboard():
-    # Appointment stats
-    upcoming_count = Appointment.query.filter(
-        Appointment.date >= datetime.now(),
-        Appointment.status == 'scheduled'
-    ).count()
-    
-    urgent_count = Appointment.query.filter(
-        Appointment.is_urgent == True,
-        Appointment.status == 'scheduled'
-    ).count()
-    
-    # Pending actions
-    pending_total = PendingAction.query.filter_by(completed=False).count()
-    pending_approvals = PendingAction.query.filter_by(
-        action_type='approval', 
-        completed=False
-    ).count()
-    
-    return render_template('dashboard.html',
-                         appointment_count=upcoming_count,
-                         urgent_count=urgent_count,
-                         pending_actions=pending_total,
-                         pending_approvals=pending_approvals)
+    """Dashboard route with optimized queries and 7-day appointment window"""
+    try:
+        # Calculate date range for upcoming 7 days
+        now = datetime.utcnow()
+        seven_days_later = now + timedelta(days=7)
+
+        # Combined appointment metrics query
+        appointment_stats = db.session.query(
+            db.func.count(Appointment.id).label('total'),
+            db.func.sum(
+                case((Appointment.is_urgent == True, 1), else_=0)
+            ).label('urgent')
+        ).filter(
+            and_(
+                Appointment.date.between(now, seven_days_later),
+                Appointment.status == 'scheduled'
+            )
+        ).first()
+
+        # Combined pending actions query
+        pending_stats = db.session.query(
+            db.func.count(PendingAction.id).label('total'),
+            db.func.sum(
+                case((PendingAction.action_type == 'approval', 1), else_=0)
+            ).label('approvals')
+        ).filter(
+            PendingAction.completed == False
+        ).first()
+
+        # Handle potential None values from database
+        appointment_count = appointment_stats.total or 0
+        urgent_count = appointment_stats.urgent or 0
+        pending_actions = pending_stats.total or 0
+        pending_approvals = pending_stats.approvals or 0
+
+        return render_template(
+            'dashboard.html',
+            appointment_count=appointment_count,
+            urgent_count=urgent_count,
+            pending_actions=pending_actions,
+            pending_approvals=pending_approvals
+        )
+
+    except Exception as e:
+        app.logger.error(f"Dashboard error: {str(e)}")
+        flash('Error loading dashboard data', 'danger')
+        return render_template('error.html'), 500
 def role_required(role):
     def decorator(f):
         @wraps(f)
@@ -304,37 +361,50 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
-@app.route('/appointments')
-def appointments():
-    # Get upcoming appointments
-    upcoming = Appointment.query.filter(
-        Appointment.date >= datetime.now(),
-        Appointment.status == 'scheduled'
-    ).order_by(Appointment.date.asc()).all()
-    
-    # Get pending actions
-    pending = PendingAction.query.filter_by(completed=False).all()
-    
-    return render_template('appointments.html',
-                         upcoming_appointments=upcoming,
-                         pending_actions=pending)
+  # Updated import
 
-@app.route('/create_appointment', methods=['GET', 'POST'])
-def create_appointment():
-    form = AppointmentForm()
+@app.route('/appointments')
+@login_required
+def appointments():
+    try:
+        # Get current time in UTC
+        now = datetime.now(timezone.utc)
+        
+        upcoming = Appointment.query.filter(
+            Appointment.user_id == current_user.id,
+            Appointment.date >= now,
+            Appointment.status == 'scheduled'
+        ).order_by(Appointment.date.asc()).all()
+        
+        pending = PendingAction.query.filter_by(
+            user_id = current_user.id,
+            completed = False
+        ).order_by(PendingAction.due_date.asc()).all()
+        
+        return render_template('appointments.html',
+                            upcoming_appointments=upcoming,
+                            pending_actions=pending)
+                            
+    except SQLAlchemyError as e:
+        app.logger.error(f"Database error: {str(e)}")
+        abort(500)
+
+# @app.route('/create_appointment', methods=['GET', 'POST'])
+# def create_appointment():
+#     form = CreateAppointmentForm()
     
-    if form.validate_on_submit():
-        new_appointment = Appointment(
-            patient_id=form.patient_id.data,
-            date=form.date.data,
-            notes=form.notes.data,
-            is_urgent=form.is_urgent.data
-        )
-        db.session.add(new_appointment)
-        db.session.commit()
-        return redirect(url_for('appointments'))
+#     if form.validate_on_submit():
+#         new_appointment = Appointment(
+#             patient_id=form.patient_id.data,
+#             date=form.date.data,
+#             notes=form.notes.data,
+#             is_urgent=form.is_urgent.data
+#         )
+#         db.session.add(new_appointment)
+#         db.session.commit()
+#         return redirect(url_for('appointments'))
     
-    return render_template('create_appointment.html', form=form)
+#     return render_template('create_appointment.html', form=form)
 
 @app.route('/complete_action/<int:action_id>')
 def complete_action(action_id):
@@ -393,16 +463,57 @@ def enroll_client():
             flash('Enrollment successful', 'success')
         except IntegrityError as e:
             db.session.rollback()
-            flash('Error processing enrollment: {}'.format(e), 'danger')
+            flash(f'Error processing enrollment: {e}', 'danger')
         except Exception as e:
             db.session.rollback()
-            flash('An unexpected error occurred: {}'.format(e), 'danger')
+            flash(f'An unexpected error occurred: {e}', 'danger')
     
     clients = Client.query.all()
     programs = Program.query.all()
-    return render_template('enroll.html', 
+    return render_template('enroll.html',  # Fix: Added proper closing
                          clients=clients, 
-                         programs=programs)@app.route('/search', methods=['GET', 'POST'])
+                         programs=programs)
+
+# In your routes.py or relevant view file
+@app.route('/create_appointment', methods=['GET', 'POST'])
+@login_required
+def create_appointment():
+    form = CreateAppointmentForm()
+    form.patient.choices = [(c.id, f"{c.name}") for c in Client.query.all()]
+    
+    if form.validate_on_submit():
+        new_appointment = Appointment(
+            client_id=form.patient.data,
+            doctor_id=current_user.id,
+            date=form.date.data,
+            notes=form.notes.data,
+            is_urgent=form.is_urgent.data
+        )
+        db.session.add(new_appointment)
+        db.session.commit()
+        flash('Appointment created!', 'success')
+        return redirect(url_for('appointments'))  # Fixed syntax
+    
+    # Display form errors
+    for field, errors in form.errors.items():
+        for error in errors:
+            flash(f"{getattr(form, field).label.text}: {error}", 'danger')
+    
+    return render_template('create_appointment.html', form=form)
+    
+    # return render_template('create_appointment.html', form=form)
+# Fix: Separate route definition with proper line breaks
+@app.route('/search', methods=['GET', 'POST'])
+@login_required
+def search_clients():
+    clients = []
+    if request.method == 'POST':
+        search_term = f"%{request.form['search']}%"
+        clients = Client.query.filter(Client.name.like(search_term)).all()
+    return render_template('search.html', 
+                         clients=clients,
+                         calculate_age=calculate_age)  # Pass function here
+
 @login_required
 def search_clients():
     clients = []
@@ -412,10 +523,11 @@ def search_clients():
     return render_template('search.html', clients=clients)
 
 @app.route('/client/<int:client_id>')
-@login_required
 def client_profile(client_id):
     client = Client.query.get_or_404(client_id)
-    return render_template('client_profile.html', client=client)
+    return render_template('client_profile.html', 
+                         client=client,
+                         calculate_age=calculate_age)  # Pass function here
 
 @app.route('/medical-record/<int:client_id>', methods=['GET', 'POST'])
 @login_required
